@@ -1,7 +1,320 @@
-<html>
-	<head>
-	</head>
-	<body>
-		Homework 2 index.html here
-	</body>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head>
+<style>
+  body {
+    background-color: white;
+    padding: 100px;
+    width: 1000px;
+    margin: auto;
+    text-align: left;
+    font-weight: 300;
+    font-family: 'Open Sans', sans-serif;
+    color: #121212;
+  }
+  h1, h2, h3, h4 {
+    font-family: 'Source Sans Pro', sans-serif;
+  }
+  kbd {
+    color: #121212;
+  }
+</style>
+<title>CS 184 Mesh Edit</title>
+<meta http-equiv="content-type" content="text/html; charset=utf-8" />
+<link href="https://fonts.googleapis.com/css?family=Open+Sans|Source+Sans+Pro" rel="stylesheet">
+
+<script>
+  MathJax = {
+    tex: {
+      inlineMath: [['$', '$'], ['\\(', '\\)']]
+    }
+  };
+</script>
+<script id="MathJax-script" async
+  src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js">
+</script>
+
+</head>
+
+
+<body>
+
+<h1 align="middle">CS 184: Computer Graphics and Imaging, Spring 2024</h1>
+<h1 align="middle">Project 2: Mesh Edit</h1>
+<h2 align="middle">Nick Jiang</h2>
+
+<br><br>
+
+<div>
+
+<h2 align="middle">Overview</h2>
+<p>
+    In this project, I implemented the de Casteljau algorithm to draw Beizer curves and surfaces. I also wrote half-edge operations like splitting and flipping to implement loop subdivision, a mesh upsampling method.
+</p>
+<br>
+
+
+<h2 align="middle">Section I: Bezier Curves and Surfaces</h2>
+
+<h3 align="middle">Part 1: Bezier Curves with 1D de Casteljau Subdivision</h3>
+
+
+<p>
+   De Casteljau's algorithm is a recursive algorithm used to derive points on the Beizer curve. To compute the next level, we linearly interpolate between consecutive control points.
+</p>
+<br>
+
+<b>
+  Here are all the steps of the algorithm for the same <code>t</code> and a set of control points.
+</b>
+<!-- Example of including multiple figures -->
+<div align="middle">
+  <table style="width:100%">
+    <tr align="center">
+      <td>
+        <img src="images/task1_1.png" align="middle" width="400px"/>
+        <figcaption>Level 0</figcaption>
+      </td>
+      <td>
+        <img src="images/task1_2.png" align="middle" width="400px"/>
+        <figcaption>Level 1</figcaption>
+      </td>
+    </tr>
+    <br>
+    <tr align="center">
+      <td>
+        <img src="images/task1_3.png" align="middle" width="400px"/>
+        <figcaption>Level 2</figcaption>
+      </td>
+      <td>
+        <img src="images/task1_4.png" align="middle" width="400px"/>
+        <figcaption>Level 3</figcaption>
+      </td>
+    </tr>
+    <br>
+    <tr align="center">
+      <td>
+        <img src="images/task1_5.png" align="middle" width="400px"/>
+        <figcaption>Level 4</figcaption>
+      </td>
+    </tr>
+  </table>
+</div>
+<br>
+
+
+<p>
+  Let's change the <code>t</code> parameter and the control points. Observe that our algorithm still finds a point on the Beizer curve!
+</p>
+<br>
+<div style="display: flex; justify-content: center;">
+  <img src="images/task1_6.png" align="middle" width="400px"/>
+</div>
+<br>
+
+
+<h3 align="middle">Part 2: Bezier Surfaces with Separable 1D de Casteljau</h3>
+<p>
+    We extend the de Casteljau algorithm to surfaces by finding a set of points of the beizer curve from each row of the control points (using parameter <code>u</code>) and
+    running the 1D version once more on the subsequent points using parameter <code>v</code>. Consequently, we can get points for each <code>u</code>, <code>v</code>
+    and once again form a smooth surface.
+</p>
+<br>
+
+
+<div style="display: flex; align-items: center; flex-direction: column;">
+  <img src="images/task2.png" align="middle" width="400px"/>
+  <figcaption>Screenshot of bez/teapot.bez</figcaption>
+</div>
+<br>
+
+
+<h2 align="middle">Section II: Triangle Meshes and Half-Edge Data Structure</h2>
+
+<h3 align="middle">Part 3: Area-Weighted Vertex Normals</h3>
+
+<p>
+    We implemented area-weighted vertex normals by iterating through the adjacent faces (using half edges), finding all three vertices, and summing the cross products of two edges.
+    Since the cross product is already proportional to the triangle area, we can just sum them together and normalize the resulting vector to arrive at the vertex normal.
+</p>
+<br>
+
+<div style="display: flex; justify-content: center;">
+  <img src="images/task3.png" align="middle" width="400px"/>
+</div>
+
+
+<h3 align="middle">Part 4: Edge Flip</h3>
+<p>
+    I implemented edge flipping by essentially rotating the edge 90 degrees counterclockwise and updating all the vertices, faces, edges, and half-edges to match the new drawing.
+    In this strategy, the half edges on the outer edges (not the ones we're rotating) "stay" where they are - ie. they'll still refer to the same edges and have the same twins.
+    Only their next pointers may be changed.
+    In terms of debugging, I found that trying to only update the pointers I needed opened me up to errors and strange results (shown below). I also created variables for every
+    vertex, face, and half-edge I needed before modifying the data structure to avoid instances of needing a pointer that I already changed.
+</p>
+<br>
+
+<div style="display: flex; justify-content: center; align-items: center; flex-direction: column;">
+  <img src="images/task4_4.png" align="middle" width="400px"/>
+  <caption>An example when I tried to modify only the pointers I needed to</caption>
+</div>
+
+<p>Here's how the teapot looks after a few edge flips!</p>
+
+<div align="middle">
+  <table style="width:100%">
+    <tr align="center">
+      <td>
+        <img src="images/task4_1.png" align="middle" width="400px"/>
+        <figcaption>One edge flip</figcaption>
+      </td>
+      <td>
+        <img src="images/task4_2.png" align="middle" width="400px"/>
+        <figcaption>A few more...</figcaption>
+      </td>
+    </tr>
+    <br>
+    <tr align="center">
+      <td>
+        <img src="images/task4_3.png" align="middle" width="400px"/>
+        <figcaption>Changed one flip back!</figcaption>
+      </td>
+    </tr>
+    <br>
+  </table>
+</div>
+<br>
+
+
+<h3 align="middle">Part 5: Edge Split</h3>
+<p>
+    To perform the edge split operation, I first created a new vertex for M, six new half-edges, 2 new faces, and 3 new edges. I preserved
+    all the half edges and edges that already exist and simply reassigned them. Like for edge flipping, I kept the outer half edges (ex. AD, DC, etc.) where they were
+    to avoid having to alter their twins. To reduce debugging, I followed the same strategy from part 4 and reassigned all pointers rather than
+    try to identify only the ones I needed to modify. I ran into a couple of issues where I forgot to assign some halfedges, but for the most part,
+    this strategy worked.
+
+</p>
+<div style="display: flex; justify-content: center; align-items: center; flex-direction: column;">
+  <img src="images/task5_1.jpg" align="middle" width="400px"/>
+  <caption>Visual diagram I followed</caption>
+</div>
+<br>
+
+<p>Here are some edge split operations by themselves.</p>
+<div align="middle">
+  <table style="width:100%">
+    <tr align="center">
+      <td>
+        <img src="images/task5_2.png" align="middle" width="400px"/>
+        <figcaption>Mesh before</figcaption>
+      </td>
+      <td>
+        <img src="images/task5_3.png" align="middle" width="400px"/>
+        <figcaption>Mesh after</figcaption>
+      </td>
+    </tr>
+    <br>
+  </table>
+</div>
+<br>
+
+<p>Here are some edge split operations combined with edge flips.</p>
+<div align="middle">
+  <table style="width:100%">
+    <tr align="center">
+      <td>
+        <img src="images/task5_4.png" align="middle" width="400px"/>
+        <figcaption>Mesh before</figcaption>
+      </td>
+      <td>
+        <img src="images/task5_5.png" align="middle" width="400px"/>
+        <figcaption>Mesh after</figcaption>
+      </td>
+    </tr>
+    <br>
+  </table>
+</div>
+<br>
+
+<h3 align="middle">Part 6: Loop Subdivision for Mesh Upsampling</h3>
+<p>
+    To perfrom loop subdivision, we precompute the modified vertex positions based on the original mesh - this includes both the old vertices as well as the new ones created from edge splitting.
+    Then, we iterate through all the edges and perform edge splitting, setting the <code>isNew</code> field of newly created edges (three out of four) to be true
+    and created an additional field <code>isSplitted</code> to indicate if this edge was split (two out of four). We then perform edge flipping on new edges that were not split and connect a new and old vertex.
+    Finally, we set the positions of all vertices, both new and old, to their new positions using the value stored in <code>newPosition</code>. For the most part, this implementation
+    went smoothly. Because we need to know both if an edge is new (to avoid re-splitting) and if it was split (for flipping), we added an additional
+    instance field. I ran into an infinite loop otherwise.
+</p>
+<p>
+  Upsampling will tend to smooth the curvature and appearance of a 3D figure. However, it's possible to preprocess the
+  shape to optimize sharpness or smoothness. For example, in Fig 1a, we have flipped the edges on each face so that they all
+  point toward the corner. Notice that as upsampling increases, the point become smooth. In contrast in Fig 2a, we have flipped
+  the edges so that they are not connected with the point, leading to a sharper appearance after upsampling.
+  Because the degree at the cube point is lower in Fig 2a, less edge splitting will occur, and the triangles
+  near the corner will be more concentrated and hence sharper.
+</p>
+
+<div align="middle">
+  <table style="width:100%">
+    <tr align="center">
+      <td>
+        <img src="images/task6_1.png" align="middle" width="400px"/>
+        <figcaption>Fig 1a: Original cube - smoothing optimized</figcaption>
+      </td>
+      <td>
+        <img src="images/task6_2.png" align="middle" width="400px"/>
+        <figcaption>Fig 1b: After upsampling (tilted forward to see smoothness) </figcaption>
+      </td>
+    </tr>
+    <br>
+    <tr align="center">
+      <td>
+        <img src="images/task6_7.png" align="middle" width="400px"/>
+        <figcaption>Fig 2a: Original cube - sharpness optimized</figcaption>
+      </td>
+      <td>
+        <img src="images/task6_8.png" align="middle" width="400px"/>
+        <figcaption>Fig 2b: After upsampling (tilted forward to see sharpness)</figcaption>
+      </td>
+    </tr>
+    <br>
+  </table>
+</div>
+
+<p>
+    Another interesting observation is that in the cube example, the smoothening is asymmetric, with some corners appearing more
+    sharp than others at the same upsampling level. This phenomenon occurs because the triangles are not symmetric from face to face
+    of the cube (see fig 1a.). If we apply edge splitting so that each face appears the same with a big X, then the upsampling
+    occurs symmetrically.
+</p>
+
+<div align="middle">
+  <table style="width:100%">
+    <tr align="center">
+      <td>
+        <img src="images/task6_5.png" align="middle" width="400px"/>
+        <figcaption>Fig 1a: Original cube. Observe that from face to face, the triangle shapes are layed differently</figcaption>
+      </td>
+      <td>
+        <img src="images/task6_6.png" align="middle" width="400px"/>
+        <figcaption>Fig 1b: After upsampling (notice that some corners are sharper than others!)</figcaption>
+      </td>
+    </tr>
+    <br>
+    <tr align="center">
+      <td>
+        <img src="images/task6_3.png" align="middle" width="400px"/>
+        <figcaption>Fig 2a: Original cube. After edge splitting, each face "looks" the same.</figcaption>
+      </td>
+      <td>
+        <img src="images/task6_4.png" align="middle" width="400px"/>
+        <figcaption>Fig 2b: After upsampling (notice that the smoothening is symmetric)</figcaption>
+      </td>
+    </tr>
+    <br>
+  </table>
+</div>
+
+</body>
 </html>
