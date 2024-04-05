@@ -1,7 +1,458 @@
-<html>
-	<head>
-	</head>
-	<body>
-		Homework 4 index.html here
-	</body>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head>
+<style>
+  body {
+    padding: 100px;
+    width: 1000px;
+    margin: auto;
+    text-align: left;
+    font-weight: 300;
+    font-family: 'Open Sans', sans-serif;
+    color: #121212;
+  }
+  h1, h2, h3, h4 {
+    font-family: 'Source Sans Pro', sans-serif;
+  }
+</style>
+<title>CS 184 Mesh Editor</title>
+<meta http-equiv="content-type" content="text/html; charset=utf-8" />
+<link href="https://fonts.googleapis.com/css?family=Open+Sans|Source+Sans+Pro" rel="stylesheet">
+</head>
+
+
+<body>
+
+<h1 align="middle">CS 184: Computer Graphics and Imaging, Spring 2024</h1>
+<h1 align="middle">Project 4: Cloth Simulator</h1>
+<h2 align="middle">Nick Jiang, CS184</h2>
+
+<br><br>
+
+<div>
+
+<h2 align="middle">Overview</h2>
+<p>
+  In this project, I implement a cloth simulator based on particle physics, representing the cloth as a series of point masses connected with springs. I write the logic to
+  simulate the physics from gravity, spring forces, and collisions with other objects / itself. I also write multiple shader programs to color the cloth
+  in various ways.
+</p>
+
+<h2 align="middle">Part I: Masses and springs</h2>
+<p>
+  To implement a grid of point masses, I found the right spacings along the width and height axes and evenly distributed a set of <code>num_width_points</code> by <code>num_height_points</code>.
+  Based on the orientation of the cloth, I distributed the points along the xz (horizontal) or xy (vertical) planes; note that our y-axis points up in this setup. I also pin the point mass if its
+  indices in our grid are stored in the <code>pinned</code> vector of the cloth. Then, I iterated through these point masses and added springs with structural, shearing, and bending constraints.
+  For example, structural springs will exist between each point mass and the one to its left and above it.
+</p>
+
+<div style="display: flex; flex-direction: column; align-items: center; margin-bottom: 10px;">
+  <img src="imgs/part1/all_constraints.png" align="middle" width="500px"/>
+  <figcaption>pinned2.json (all constraints present)</figcaption>
+</div>
+
+<div style="display: flex; flex-direction: column; align-items: center; margin-bottom: 10px;">
+  <img src="imgs/part1/shearing.png" align="middle" width="500px"/>
+  <figcaption>pinned2.json (shearing constraints)</figcaption>
+</div>
+
+<div style="display: flex; flex-direction: column; align-items: center; margin-bottom: 10px;">
+  <img src="imgs/part1/no_shearing.png" align="middle" width="500px"/>
+  <figcaption>pinned2.json (structural / bending constraints)</figcaption>
+</div>
+
+
+<h2 align="middle">Part II: Simulation via numerical integration</h2>
+<p>
+  There are two forces we need to consider: external (ex. gravity) and spring forces. First, we apply the force from <code>external_acclereations</code> to each point mass
+  as well as calculate the appropriate spring force using Hooke's Law. Then, we apply Vevet integration to compute how each point mass changes per delta-time:
+  <code>x_new = x + v*t + a*t^2</code>. Finally, to prevent the springs from being deformed too much, we clamp the spring length to 10% greater than the rest length.
+  We apply any positional changes to the two corresponding point masses based on which is pinned; if it's pinned, it should stay where it is.
+</p>
+
+<p>Let's observe how altering the spring constant (ks), density, and damping factor impact the results.</p>
+<div style="display: flex; flex-direction: row; justify-content: center;">
+  <div style="display: flex; flex-direction: column; align-items: center;">
+    <img src="imgs/part2/default1.png" align="middle" height="200px"/>
+  </div>
+  <div style="display: flex; flex-direction: column; align-items: center;">
+    <img src="imgs/part2/default2.png" align="middle" height="200px"/>
+  </div>
+  <div style="display: flex; flex-direction: column; align-items: center;">
+    <img src="imgs/part2/default3.png" align="middle" height="200px"/>
+  </div>
+</div>
+<p>
+  Here is the cloth under default settings. The fall is smooth, gradual, and controlled.
+</p>
+
+<div style="display: flex; flex-direction: row; justify-content: center;">
+  <div style="display: flex; flex-direction: column; align-items: center;">
+    <img src="imgs/part2/ks_low.png" align="middle" height="200px"/>
+    <caption>ks = 5</caption>
+  </div>
+  <div style="display: flex; flex-direction: column; align-items: center;">
+    <img src="imgs/part2/ks_low1.png" align="middle" height="200px"/>
+    <caption>ks = 5</caption>
+  </div>
+</div>
+<div style="display: flex; flex-direction: row; justify-content: center;">
+  <div style="display: flex; flex-direction: column; align-items: center;">
+    <img src="imgs/part2/ks_high.png" align="middle" height="200px"/>
+    <caption>ks = 50000</caption>
+  </div>
+  <div style="display: flex; flex-direction: column; align-items: center;">
+    <img src="imgs/part2/ks_high1.png" align="middle" height="200px"/>
+    <caption>ks = 50000</caption>
+  </div>
+</div>
+<p>
+  Increasing the spring constant causes the cloth to be stiffer and taut as shown by the final resting state. This makes sense
+  because the spring forces are much stronger, giving the particles less freedom to move around.
+  We can see that as the cloth falls with ks = 5, creases are already forming whereas none appear at the same position for ks = 50000.
+</p>
+
+<div style="display: flex; flex-direction: row; justify-content: center;">
+  <div style="display: flex; flex-direction: column; align-items: center;">
+    <img src="imgs/part2/density_low.png" align="middle" height="200px"/>
+    <caption>density = 1</caption>
+  </div>
+  <div style="display: flex; flex-direction: column; align-items: center;">
+    <img src="imgs/part2/density_low1.png" align="middle" height="200px"/>
+    <caption>density = 1</caption>
+  </div>
+</div>
+<div style="display: flex; flex-direction: row; justify-content: center;">
+  <div style="display: flex; flex-direction: column; align-items: center;">
+    <img src="imgs/part2/density_high.png" align="middle" height="200px"/>
+    <caption>density = 100</caption>
+  </div>
+  <div style="display: flex; flex-direction: column; align-items: center;">
+    <img src="imgs/part2/density_high1.png" align="middle" height="200px"/>
+    <caption>density = 100</caption>
+  </div>
+</div>
+<p>
+  Increasing the density causes the cloth to sag and crease more as it falls down, which follows because the mass
+  of the particles is increased. As a result, it will weigh more. Unlike for the effect for spring constants,
+  the cloth will be the same level of tautness. You can see that at density = 100, the cloth does sag, but its shape is much
+  more defined than when the spring constant is lowered.
+</p>
+
+<div style="display: flex; flex-direction: row; justify-content: center;">
+  <div style="display: flex; flex-direction: column; align-items: center;">
+    <img src="imgs/part2/damping_low.png" align="middle" height="200px"/>
+    <caption>low damping</caption>
+  </div>
+  <div style="display: flex; flex-direction: column; align-items: center;">
+    <img src="imgs/part2/damping_low1.png" align="middle" height="200px"/>
+    <caption>low damping</caption>
+  </div>
+  <div style="display: flex; flex-direction: column; align-items: center;">
+    <img src="imgs/part2/damping_low2.png" align="middle" height="200px"/>
+    <caption>low damping</caption>
+  </div>
+</div>
+<div style="display: flex; flex-direction: row; justify-content: center;">
+  <div style="display: flex; flex-direction: column; align-items: center;">
+    <img src="imgs/part2/damping_high.png" align="middle" height="200px"/>
+    <caption>high damping</caption>
+  </div>
+  <div style="display: flex; flex-direction: column; align-items: center;">
+    <img src="imgs/part2/damping_high1.png" align="middle" height="200px"/>
+    <caption>high damping</caption>
+  </div>
+  <div style="display: flex; flex-direction: column; align-items: center;">
+    <img src="imgs/part2/damping_high2.png" align="middle" height="200px"/>
+    <caption>high damping</caption>
+  </div>
+</div>
+<p>
+  A lower damping constant will cause the cloth to move more violently and have less of a smooth fall. For example, you can see
+  that the cloth blows past the resting state first when the damping factor is low. This is because during Vevet integration,
+  a high damping constant will lower the impact of the velocity term, so changes in position will be more gradual and predictable
+  based on the acceleration. A high damping factor simulates energy loss from friction, air resistance, etc.
+</p>
+
+<div style="display: flex; flex-direction: column; align-items: center; margin-bottom: 10px;">
+  <img src="imgs/part2/pinned4.png" align="middle" width="500px"/>
+  <figcaption>pinned4.json (default parameters)</figcaption>
+</div>
+
+
+
+<h2 align="middle">Part III: Handling Collisions with Other Objects</h2>
+<p>
+  We implement collision detection between a point mass and spheres / planes. For spheres, we check if the point mass lies within the sphere, and if it does,
+  we adjust the position to the closest surface point (change dampened from friction) on the sphere. For planes, we generate a ray starting from the point mass's
+  <code>last_position</code> (in the direction of <code>position</code>) and check if it intersects with the plane using the plane-intersection equation.
+  If it does, we position the point mass to be right above the intersection point, again dampening the change from friction.
+</p>
+
+<div style="display: flex; flex-direction: row; justify-content: center;">
+  <div style="display: flex; flex-direction: column; align-items: center;">
+    <img src="imgs/part3/ks500.png" align="middle" height="200px"/>
+    <caption>ks = 500</caption>
+  </div>
+  <div style="display: flex; flex-direction: column; align-items: center;">
+    <img src="imgs/part3/ks5000.png" align="middle" height="200px"/>
+    <caption>ks = 5000</caption>
+  </div>
+  <div style="display: flex; flex-direction: column; align-items: center;">
+    <img src="imgs/part3/ks50000.png" align="middle" height="200px"/>
+    <caption>ks = 50000</caption>
+  </div>
+</div>
+<p>
+  As the spring constant increases, the cloth becomes more taut and sticks out further from the sphere. At the lowest setting, the
+  cloth envelops the sphere and is much more "droopy". As with previous section, this effect occurs because the increased spring forces
+  counteract gravity and leave the cloth more suspended in the air.
+</p>
+
+<div style="display: flex; flex-direction: row; justify-content: center;">
+  <div style="display: flex; flex-direction: column; align-items: center;">
+    <img src="imgs/part3/plane1.png" align="middle" height="200px"/>
+    <caption>Normal</caption>
+  </div>
+  <div style="display: flex; flex-direction: column; align-items: center;">
+    <img src="imgs/part3/plane2.png" align="middle" height="200px"/>
+    <caption>Wireframe</caption>
+  </div>
+</div>
+
+<p>Here is the cloth resting peacefully in its final state on the plane!</p>
+
+<h2 align="middle">Part IV: Handling self-collisions</h2>
+
+<p>
+  At this point, our cloth isn't able to handle collisions with itself, only other objects like spheres and planes.
+  To handle self-collisions, we build a spatial map that maps a float denoting a unique 3D volume
+  to a vector of point masses contained within that specific space. This "3D volume" is going to be <code>w</code>
+  by <code>h</code> by <code>t</code> big, where <code>w = 3 * width / num_width_points</code>,
+  <code>h = 3 * height / num_height_points</code>, and <code>t = max(w, h)</code>. To convert any point mass's
+  position into a float, we floor divide the position by w, h, and t (accounting for the orientation) to get unique
+  "partition numbers" for w, h, and t. We then apply the formula <code>t_group / base + w_group + h_group * base</code>,
+  where <code>base = max(num_height_points, num_width_points)</code>.
+</p>
+<p>
+  Now given the spatial map, we iterate through the point masses and check the points that are in the same subdivided
+  3D volume. If any point is close by, we apply a repelling force to the position and average the changes together.
+</p>
+
+<div style="display: flex; flex-direction: row; justify-content: center;">
+  <div style="display: flex; flex-direction: column; align-items: center;">
+    <img src="imgs/part4/fold1.png" align="middle" height="200px"/>
+  </div>
+  <div style="display: flex; flex-direction: column; align-items: center;">
+    <img src="imgs/part4/fold2.png" align="middle" height="200px"/>
+  </div>
+  <div style="display: flex; flex-direction: column; align-items: center;">
+    <img src="imgs/part4/fold3.png" align="middle" height="200px"/>
+  </div>
+  <div style="display: flex; flex-direction: column; align-items: center;">
+    <img src="imgs/part4/fold4.png" align="middle" height="200px"/>
+  </div>
+</div>
+
+<p>
+  Here are some examples of a cloth folding on itself!
+</p>
+
+<div style="display: flex; flex-direction: row; justify-content: center;">
+  <div style="display: flex; flex-direction: column; align-items: center;">
+    <img src="imgs/part4/density_low1.png" align="middle" height="200px"/>
+    <caption>density = 1</caption>
+  </div>
+  <div style="display: flex; flex-direction: column; align-items: center;">
+    <img src="imgs/part4/density_low2.png" align="middle" height="200px"/>
+    <caption>density = 1</caption>
+  </div>
+  <div style="display: flex; flex-direction: column; align-items: center;">
+    <img src="imgs/part4/density_low3.png" align="middle" height="200px"/>
+    <caption>density = 1</caption>
+  </div>
+</div>
+<div style="display: flex; flex-direction: row; justify-content: center;">
+  <div style="display: flex; flex-direction: column; align-items: center;">
+    <img src="imgs/part4/density_high1.png" align="middle" height="200px"/>
+    <caption>density = 100</caption>
+  </div>
+  <div style="display: flex; flex-direction: column; align-items: center;">
+    <img src="imgs/part4/density_high2.png" align="middle" height="200px"/>
+    <caption>density = 100</caption>
+  </div>
+  <div style="display: flex; flex-direction: column; align-items: center;">
+    <img src="imgs/part4/density_high3.png" align="middle" height="200px"/>
+    <caption>density = 100</caption>
+  </div>
+</div>
+
+<p>
+  When the density is low, the cloth has fewer folds that are bigger in size. We can count the number of folds by the end.
+  When the density is high, the cloth looks like it crumples on itself with many small folds.
+</p>
+
+<div style="display: flex; flex-direction: row; justify-content: center;">
+  <div style="display: flex; flex-direction: column; align-items: center;">
+    <img src="imgs/part4/ks_low1.png" align="middle" height="200px"/>
+    <caption>ks = 50</caption>
+  </div>
+  <div style="display: flex; flex-direction: column; align-items: center;">
+    <img src="imgs/part4/ks_low2.png" align="middle" height="200px"/>
+    <caption>ks = 50</caption>
+  </div>
+  <div style="display: flex; flex-direction: column; align-items: center;">
+    <img src="imgs/part4/ks_low3.png" align="middle" height="200px"/>
+    <caption>ks = 50</caption>
+  </div>
+</div>
+<div style="display: flex; flex-direction: row; justify-content: center;">
+  <div style="display: flex; flex-direction: column; align-items: center;">
+    <img src="imgs/part4/ks_high1.png" align="middle" height="200px"/>
+    <caption>ks = 50000</caption>
+  </div>
+  <div style="display: flex; flex-direction: column; align-items: center;">
+    <img src="imgs/part4/ks_high2.png" align="middle" height="200px"/>
+    <caption>ks = 50000</caption>
+  </div>
+  <div style="display: flex; flex-direction: column; align-items: center;">
+    <img src="imgs/part4/ks_high3.png" align="middle" height="200px"/>
+    <caption>ks = 50000</caption>
+  </div>
+</div>
+
+<p>
+  When the spring constant is low, the cloth behaves similarly to when the density is high: it crumples more and
+  has smaller folds. When the spring constant is high, there are fewer, larger folds. When the spring forces are
+  high, the cloth resembles a piece of construction paper that is firmer.
+</p>
+
+<h2 align="middle">Part V: Shaders</h2>
+
+<p>
+  Shader programs use the GPU to parallelize the parts of the graphics pipeline.
+  Two common shader programs are those that involve vertices (of the triangles)
+  and fragments (pixels/sub-pixels). For example, vertex shaders set the positions of vertices, and
+  fragment shaders can compute the color of fragments. Because each vertex and fragment can be treated
+  as independent from one another, we can run their processes in parallel on the GPU.
+</p>
+
+<p>
+  The Blinn-phong model is one great way to determine shading based on ambiant light, diffuse light, and specular light.
+  Ambiant light does not come from a specific light source and refers to the general illuminance of a surface. Diffuse light
+  Diffuse light refers to direct illumination that scatters across all directions equally when it hits a surface.
+  Finally, specular lighting refers to light that has perfectly reflected when it hits a surface and has a glossy / shiny appearance.
+</p>
+
+<div style="display: flex; flex-direction: row; justify-content: center;">
+  <div style="display: flex; flex-direction: column; align-items: center;">
+    <img src="imgs/part5/phong_ambiant.png" align="middle" height="200px"/>
+    <caption>Ambiant (blinn-phong)</caption>
+  </div>
+  <div style="display: flex; flex-direction: column; align-items: center;">
+    <img src="imgs/part5/phong_diffuse.png" align="middle" height="200px"/>
+    <caption>Diffuse</caption>
+  </div>
+  <div style="display: flex; flex-direction: column; align-items: center;">
+    <img src="imgs/part5/phong_specular.png" align="middle" height="200px"/>
+    <caption>Specular</caption>
+  </div>
+  <div style="display: flex; flex-direction: column; align-items: center;">
+    <img src="imgs/part5/phong_all.png" align="middle" height="200px"/>
+    <caption>All combined</caption>
+  </div>
+</div>
+
+<p>
+  The Blinn-phong model is one great way to determine shading based on ambiant light, diffuse light, and specular light.
+  Ambiant light does not come from a specific light source and refers to the general illuminance of a surface. Diffuse light
+  Diffuse light refers to direct illumination that scatters across all directions equally when it hits a surface.
+  Finally, specular lighting refers to light that has perfectly reflected when it hits a surface and has a glossy / shiny appearance.
+</p>
+
+<div style="display: flex; flex-direction: column; align-items: center; margin-bottom: 10px;">
+  <img src="imgs/part5/textures.png" align="middle" width="500px"/>
+  <figcaption>Custom texture shader</figcaption>
+</div>
+
+<p>
+  This image uses a texture shader that maps a picture of a bird to the cloth!
+</p>
+
+<div style="display: flex; flex-direction: row; justify-content: center;">
+  <div style="display: flex; flex-direction: column; align-items: center;">
+    <img src="imgs/part5/bump_cloth.png" align="middle" height="300px"/>
+    <caption>Bump</caption>
+  </div>
+  <div style="display: flex; flex-direction: column; align-items: center;">
+    <img src="imgs/part5/bump_cloth1.png" align="middle" height="300px"/>
+    <caption>Bump</caption>
+  </div>
+  <div style="display: flex; flex-direction: column; align-items: center;">
+    <img src="imgs/part5/bump_sphere.png" align="middle" height="300px"/>
+    <caption>Bump</caption>
+  </div>
+</div>
+<div style="display: flex; flex-direction: row; justify-content: center;">
+  <div style="display: flex; flex-direction: column; align-items: center;">
+    <img src="imgs/part5/displacement_sphere.png" align="middle" height="300px"/>
+    <caption>Displacement</caption>
+  </div>
+  <div style="display: flex; flex-direction: column; align-items: center;">
+    <img src="imgs/part5/displacement_sphere1.png" align="middle" height="300px"/>
+    <caption>Displacement</caption>
+  </div>
+</div>
+
+<p>
+  These images use bump mapping and displacement to render the previous bird texture over the cloth.
+  Displacement shaders require a lower height and higher normal in comparison to the bump shaders to
+  achieve similar images. Although both shaders can clearly show the bird, displacement shaders alter
+  the vertex positions to "move" and match the shape of the bird. You can see that the
+  bump shaders produce a smooth cloth wheras the displaced cloth is more jagged in areas where the bird is.
+</p>
+
+<div style="display: flex; flex-direction: row; justify-content: center;">
+  <div style="display: flex; flex-direction: column; align-items: center;">
+    <img src="imgs/part5/bump_coarse_low.png" align="middle" height="300px"/>
+    <caption>low coarseness (bump)</caption>
+  </div>
+  <div style="display: flex; flex-direction: column; align-items: center;">
+    <img src="imgs/part5/displacement_coarse_low.png" align="middle" height="300px"/>
+    <caption>low coarseness (displacement)</caption>
+  </div>
+</div>
+<div style="display: flex; flex-direction: row; justify-content: center;">
+  <div style="display: flex; flex-direction: column; align-items: center;">
+    <img src="imgs/part5/bump_coarse_high.png" align="middle" height="300px"/>
+    <caption>high coarseness (bump)</caption>
+  </div>
+  <div style="display: flex; flex-direction: column; align-items: center;">
+    <img src="imgs/part5/displacement_coarse_high.png" align="middle" height="300px"/>
+    <caption>high coarseness (displacement)</caption>
+  </div>
+</div>
+
+<p>
+  Increasing the coarseness from 16x16 resolution to 128x128 resolution makes a clear difference. The spheres
+  in particular are much smoother in the bottom images, and in the case of displacement, the high coarseness
+  version is displaced in much more fine-grained detail.
+</p>
+
+<div style="display: flex; flex-direction: row; justify-content: center;">
+  <div style="display: flex; flex-direction: column; align-items: center;">
+    <img src="imgs/part5/mirror_cloth.png" align="middle" height="300px"/>
+    <caption>Mirror shader (cloth)</caption>
+  </div>
+  <div style="display: flex; flex-direction: column; align-items: center;">
+    <img src="imgs/part5/mirror_sphere.png" align="middle" height="300px"/>
+    <caption>Mirror shader (sphere)</caption>
+  </div>
+</div>
+<p>
+  Lastly, here is the mirror shader!
+</p>
+
+
+</body>
 </html>
